@@ -1,0 +1,24 @@
+{
+  "name": "serve-static-server",
+  "version": "1.0.0",
+  "description": "Serve a directory with static resources",
+  "main": "dev-server.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "dev",
+    "server",
+    "static",
+    "serve"
+  ],
+  "author": "Martin Hövre <martin.hovre@opencubes.io>",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.15.3"
+  },
+  "preferGlobal": true,
+  "bin": {
+    "ds":"dev-server.js"
+  }
+}
