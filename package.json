@@ -1,6 +1,6 @@
 {
   "name": "serve-static-server",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Serve a directory with static resources",
   "main": "dev-server.js",
   "scripts": {
@@ -14,12 +14,9 @@
   ],
   "author": "Martin Hövre <martin.hovre@opencubes.io>",
   "license": "MIT",
-  "dependencies": {
-    "express": "^4.15.3"
-  },
   "preferGlobal": true,
   "bin": {
-    "ds":"dev-server.js"
+    "ds": "dev-server.js"
   },
   "repository": "https://github.com/ocpu/serve-static-server",
   "homepage": "https://github.com/ocpu/serve-static-server#readme",

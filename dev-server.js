@@ -1,53 +1,86 @@
 #!/usr/bin/env node
-if (process.argv[2] === '-h' || process.argv[2] === '-help' || process.argv[2] === '--help') {
-    console.log(`
-Usage: ds [--help | -help | -h] [-v | -version | --version] [<args>] <static serve point>
-
-args:
-    -p,-port,--port     The port to use when serving
-
-<static serve point> can be omitted to use current working directory
-`)
-    process.exit(0)
-}
-if (process.argv.length === 3 && (process.argv[2] === '-v' || process.argv[2] === '-version' || process.argv[2] === '--version')) {
+if (getOption('-v, -version, --version', process.argv)) {
     console.log(`${require('./package.json').version}`)
     process.exit(0)
 }
+if (getOption('-h, -help, --help', process.argv)) {
+    console.log(`
+    Usage: ds [options] [directory]
 
-var hasPortArg = ~process.argv.indexOf('-p') ?
-    process.argv.indexOf('-p') + 1 :
-    ~process.argv.indexOf('-port') ?
-        process.argv.indexOf('-pprt') + 1 :
-        ~process.argv.indexOf('--port') ?
-            process.argv.indexOf('--port') + 1 :
-            void 0
+    Options:
 
-var port = hasPortArg ? process.argv[hasPortArg] : 5000
+        -h, --help           Show this help message.
+        -v, --version     Show current version.
+        -p, --port <port>    The port to use when serving.
 
-var servePoint = hasPortArg ? process.argv[hasPortArg + 1] || process.cwd() : process.argv[2] || process.cwd()
-var express = require('express')
-var app = express().use(express.static(servePoint))
-var addresses = discoverLocalAdresses()
-function setup(port) {
-    require('http').createServer(app).listen(port).once('listening', function () {
-        console.log(`Serving ${servePoint} on http://127.0.0.1:${port}`)
-        addresses.forEach(function (address) {
-            require('http').createServer(app).listen(port, address).once('listening', function () {
-                console.log(`Serving ${servePoint} on http://${address}:${port}`)    
-            })
-        })
-    }).once('error', function (err) {
-        if (err.code === 'EADDRINUSE')
-            setup(port + 1)
-        else {
-            console.error(err)
-            process.exit(1)
-        }
-    })
+    Directory can be omitted to use the current working directory.
+`)
+    process.exit(0)
 }
 
-setup(port)
+// Get serve point and optional port
+const port = getOption('-p, --port <port>', process.argv) || 5000
+const servePoint = process.argv.length === 3 ? require('path').resolve(process.argv[2]) : process.cwd()
+const path = require('path')
+const fs = require('fs')
+const extToMime = require('./extToMime.json')
+const app = (req, res) => {
+    const url = require('url').parse(req.url)
+    let fileToServe = servePoint + url.pathname.replace(/\//g, path.sep)
+    if (fileToServe.endsWith(path.sep))
+        fileToServe += 'index.html'
+    try {
+        const { size } = fs.statSync(fileToServe)
+        res.setHeader('content-type', (extToMime[path.extname(fileToServe)] || extToMime['']) + '; charset=utf-8')
+        res.setHeader('content-length', size)
+        res.statusCode = 200
+        res.statusMessage = "OK"
+        fs.createReadStream(fileToServe).pipe(res)
+    } catch (e) {
+        const content = new Buffer(`cannot ${req.method} ${req.url}`)
+        res.setHeader('content-type', 'text/plain; charset=utf-8')
+        res.setHeader('content-length', content.byteLength)
+        res.statusCode = 404
+        res.statusMessage = 'Not Found'
+        res.end(content)
+    }
+}
+const addresses = discoverLocalAdresses()
+addresses.splice(0, 0, '127.0.0.1')
+
+const logListen = callAfter(addresses.length, () => {
+    console.log(`Serving ${servePoint} on [${addresses.map(({ address, port }) => `http://${address}:${port}`).join(', ')}]`)
+})
+
+addresses.forEach(function (address, index) {
+    getPort(address, port, port => {
+        require('http').createServer(app).listen(port, address).once('listening', function () {
+            addresses[index] = {
+                address,
+                port
+            }
+            logListen()
+        })
+    })
+})
+
+function getPort(address, port, cb) {
+    const server = require('http').createServer()
+    server.once('listening', onListen)
+    server.once('error', onError)
+    server.listen(port, address)
+
+    function onListen() {
+        server.close()
+        cb(port)
+    }
+    
+    function onError() {
+        server.removeAllListeners()
+        server.close()
+        getPort(port + 1, cb)
+    }
+}
 
 function discoverLocalAdresses() {
     var os = require('os');
@@ -62,4 +95,30 @@ function discoverLocalAdresses() {
         }
     }
     return addresses
+}
+
+function getOption(flags, args) {
+    const _flags = flags.split(/,\s?/g)
+    const hasValue = /\s<(\w+)>$/g.test(_flags[_flags.length - 1])
+    _flags[_flags.length - 1] = _flags[_flags.length - 1].split(/\s/)[0]
+    let index = -1
+    let length = args.length
+    while ((length--) > 0 && index === -1) if (~_flags.indexOf(args[length])) index = length
+    if (~index) {
+        if (!hasValue) {
+            args.splice(index, 1)
+            return true
+        }
+        return args.splice(index, 2)[1]
+    }
+    if (!hasValue) return false
+}
+
+function callAfter(times, cb) {
+    let calls = 0
+    return function () {
+        calls++
+        if (calls >= times)
+            cb()
+    }
 }
