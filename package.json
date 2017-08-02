@@ -1,6 +1,6 @@
 {
   "name": "serve-static-server",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Serve a directory with static resources",
   "main": "dev-server.js",
   "scripts": {
@@ -20,5 +20,8 @@
   "preferGlobal": true,
   "bin": {
     "ds":"dev-server.js"
-  }
+  },
+  "repository": "https://github.com/ocpu/serve-static-server",
+  "homepage": "https://github.com/ocpu/serve-static-server#readme",
+  "bugs": "https://github.com/ocpu/serve-static-server/issues"
 }
