@@ -5,5 +5,5 @@
     ".css": "text/css",
     ".json": "application/json",
     ".xml": "text/xml",
-    "": "application/octet-stream"
+    "": "text/plain"
 }

@@ -20,5 +20,8 @@
   },
   "repository": "https://github.com/ocpu/serve-static-server",
   "homepage": "https://github.com/ocpu/serve-static-server#readme",
-  "bugs": "https://github.com/ocpu/serve-static-server/issues"
+  "bugs": "https://github.com/ocpu/serve-static-server/issues",
+  "dependencies": {
+    "file-type": "5.2.0"
+  }
 }
