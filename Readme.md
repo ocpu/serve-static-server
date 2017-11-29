@@ -1,15 +1,15 @@
-Serve files in a folder staticaly. 
+Serve files in a folder and defults to current working directory. Files are streamed and gzipped/deflated on request demand.
 
+$ `dev-server -h`
 ```
-> ds -h
+    Usage: dev-server [options] [directory]
 
-    Usage: ds [options] [directory]
 
-    Options:
+  Options:
 
-        -h, --help           Show this help message.
-        -v, --version     Show current version.
-        -p, --port <port>    The port to use when serving.
-
-    Directory can be omitted to use the current working directory.
+    -v, --version      output the version number
+    -p, --port [port]  the port to use when serving (default: 5000)
+    -f, --404 [file]   show custom 404 page
+    -l, --only-local   force to only serve on local device
+    -h, --help         output usage information
 ```

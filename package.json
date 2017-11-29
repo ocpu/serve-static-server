@@ -1,6 +1,6 @@
 {
   "name": "serve-static-server",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "description": "Serve a directory with static resources",
   "main": "dev-server.js",
   "scripts": {
@@ -16,12 +16,15 @@
   "license": "MIT",
   "preferGlobal": true,
   "bin": {
-    "ds": "dev-server.js"
+    "dev-server": "dev-server.js"
   },
   "repository": "https://github.com/ocpu/serve-static-server",
   "homepage": "https://github.com/ocpu/serve-static-server#readme",
   "bugs": "https://github.com/ocpu/serve-static-server/issues",
   "dependencies": {
-    "file-type": "5.2.0"
+    "colors": "^1.1.2",
+    "commander": "^2.12.2",
+    "file-type": "5.2.0",
+    "mime": "^2.0.3"
   }
 }
