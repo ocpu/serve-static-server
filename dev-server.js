@@ -1,30 +1,22 @@
 #!/usr/bin/env node
 'use strict'
 
-// Native modules
-const { createGzip, createDeflate } = require('zlib')
-const { createHash } = require('crypto')
-const { promisify } = require('util')
+// Node modules
 const path = require('path')
-const url = require('url')
 const fs = require('fs')
 
-// NPM modules
-const mime = require('mime')
-const fileType = require('file-type')
-const colors = require('colors')
 
 // Variables
-const readFile = promisify(fs.readFile)
-const exists = promisify(fs.exists)
-const read = promisify(fs.read)
-const open = promisify(fs.open)
 const program = require('commander')
   .version(require('./package.json').version, '-v, --version')
   .usage('[options] [directory]')
   .option('-p, --port [port]', 'the port to use when serving', 5000)
   .option('-f, --404 [file]', 'show custom 404 page')
   .option('-l, --only-local', 'force to only serve on local device')
+  .option('-c, --cert [file]', 'certificate file')
+  .option('-k, --key [file]', 'certificate key file')
+  .option('-s, --secure', 'use a secure connection https or secure http2')
+  .option('-h2, --http2', 'use http2')
   .parse(process.argv)
 
 // Program options
@@ -32,126 +24,70 @@ const port = program.port
 const file404 = program[404]
 const onlyLocal = program.onlyLocal
 const servePoint = path.resolve(program.args[0] || '.')
+const cert = program.cert
+const key = program.key
+const secure = program.secure
+const http2 = program.http2
 
+const serverType = http2 ? 'http2' : 'http'
+const secureOptions = {
+  allowHTTP1: true,
+  cert,
+  key
+}
 
-const app = async (req, res) => {
-  // Get file to serve
-  let fileToServe = servePoint + url.parse(req.url).pathname.replace(/\//g, path.sep)
-  // If the path ends with / or \ append index.html
-  if (fileToServe.endsWith(path.sep))
-    fileToServe += 'index.html'
+if (secure && (cert === void 0 || key === void 0)) {
+  console.error('The key and cert option must be pressent to use ' + serverType)
+  process.exit(1)
+}
 
+if (cert) {
   try {
-    await serveFile(fileToServe, res, req.headers)
+    fs.statSync(cert)
   } catch (e) {
-    await serveNotFound(e, fileToServe, req, res)
+    if (e.code === 'ENOENT')
+      console.error('certificate file does not exist')
+    process.exit(1)
   }
-
-  const status = res.statusCode
-  const { method, url: path, headers } = req
-  const browser = colors.cyan('(' + getBrowserFromAgent(headers['user-agent']) + ')')
-  const requestMethod = colors.magenta(method)
-  const statusCode = colors[
-    status >= 400 ? 'red' :
-    status >= 300 ? 'blue' :
-    'green'
-  ](status)
-  console.log(`[${browser} ${requestMethod}/${statusCode}] ${colors.underline(path)}`)
 }
 
-async function serveFile(file, res, headers) {
-  // Test browser cache
-  const etag = await getETag(file)
-  if (etag === headers['if-none-match']) {
-    res.statusCode = 304
-    res.end()
-    return
+if (key) {
+  try {
+    fs.statSync(key)
+  } catch (e) {
+    if (e.code === 'ENOENT')
+      console.error('key file does not exist')
+    process.exit(1)
   }
-
-  // Set content encoding
-  const encodingHeader = headers['accept-encoding']
-  const [encoding, stream] =
-    ~encodingHeader.indexOf('gzip') ? ['gzip', createGzip] :
-    ~encodingHeader.indexOf('deflate') ? ['deflate', createDeflate] :
-    ['identity', res]
-
-  if (stream !== res) stream.pipe(res)
-  if (encoding === 'identity') res.setHeader('Content-Length', fs.statSync(file).size)
-  res.setHeader('Content-Encoding', encoding)
-
-  // Set mime type
-  const mimeType = await getMimeType(file)
-  if (mimeType) res.setHeader('Content-Type', mimeType)
-  
-  // Caching
-  res.setHeader('ETag', etag)
-  res.setHeader('Cache-Control', 'public, max-age=31536000')
-
-  res.setHeader('Vary', 'Accept-Encoding')
-  res.statusCode = res.statusCode || 200
-  fs.createReadStream(file).pipe(stream)
 }
 
-async function serveNotFound(e, file, req, res) {
-  res.statusCode = 404
-  if (!file404 && await exists(file404)) {
-    const content = new Buffer(`Cannot ${req.method} ${req.url}`)
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8')
-    res.setHeader('Content-Length', content.byteLength)
-    res.setHeader('Content-Encoding', 'identity')
-    res.end(content)
-  } else await serveFile(file404, res, req.headers)
-  
-  // Log error to console
-  if (e.code === 'ENOENT')
-    console.error(`Could not find resource ${path.resolve(file)}`)
-  else console.error(e)
-}
-
-const getETag = async file =>
-  createHash('md5').update(await readFile(file)).digest('base64')
-
-async function getMimeType(file) {
-  // First pass
-  const mimeType = mime.getType(file)
-  if (mimeType) return mimeType
-
-  // Second pass
-  const smallBuffer = Buffer.alloc(20)
-  const fd = await open(file, 'r')
-  await read(fd, smallBuffer, 0, smallBuffer.length, 0)
-  fs.close(fd)
-  const type = fileType(smallBuffer)
-  if (type) return type.mime
-
-  // Default
-  return 'text/plain'
-}
+const app = require('./' + serverType)(servePoint, file404)
 
 // Get addresses to serve
 const addresses = ['127.0.0.1']
 if (!onlyLocal) addresses.concat(discoverLocalAdresses())
 
+const servers = new Array(addresses.length)
+
 const logListen = callAfter(addresses.length, () =>
   console.log(`Serving ${servePoint} on [ ${addresses.map(({ address, port }) => `http://${address}:${port}`).join(', ')} ]\n`)
 )
 
-const getBrowserFromAgent = agent => 
-  ~agent.indexOf('Chrome') ? 'Chrome' :
-  ~agent.indexOf('Safari') ? 'Safari' :
-  ~agent.indexOf('Firefox') ? 'Firefox' :
-  ~agent.indexOf('Edge') ? 'Egde' :
-  ~agent.indexOf('MSIE') ? 'Internet Explorer' :
-  'Undefined'
+const createServer = 
+  secure ? 
+    http2 ? 
+      require('http2').createSecureServer :
+      require('https').createServer :
+    http2 ?
+      require('http2').createServer :
+      require('http').createServer
+
 
 // For every address listen to the avaliable port
 addresses.forEach(function (address, index) {
   getPort(address, port, port => {
-    require('http').createServer(app).listen(port, address).once('listening', function () {
-      addresses[index] = {
-        address,
-        port
-      }
+    servers[index] = createServer(...[secure ? secureOptions : app, app]).listen(port, address).once('listening', () => {
+      addresses[index] = { address, port }
       logListen()
     })
   })
@@ -190,3 +126,11 @@ function discoverLocalAdresses() {
 
 const callAfter = (times, cb, calls = 0) => () =>
   ++calls >= times && cb()
+
+process.on('SIGINT', () => {
+  console.log('\nShutting down...')
+  servers.forEach(server => {
+    server.close()
+  })
+  process.exit()
+})
